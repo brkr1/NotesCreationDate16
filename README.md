@@ -12,3 +12,6 @@ This project is an updated continuation of previous work by the iOS jailbreak co
 * Displays both **Created** and **Modified** timestamps directly in the note header.
 * Dynamically updates dates when editing notes without breaking line layouts or causing truncations.
 * Adjusts header overscroll spacing to fit two lines seamlessly.
+
+<img width="1290" height="348" alt="1786130512---com apple mobilenotes" src="https://github.com/user-attachments/assets/8cfd401d-18ce-4086-b499-d3a46a3a2a7a" />
+
