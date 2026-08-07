@@ -14,69 +14,20 @@
 - (void)updateDateLabel;
 @end
 
-static void LXDebugLog(NSString *line) {
-    @try {
-        NSString *path = [NSHomeDirectory() stringByAppendingPathComponent:
-                          @"Documents/NotesCreationDate16_debug.txt"];
-
-        NSString *timestamped =
-            [NSString stringWithFormat:@"%@ %@\n", [NSDate date], line];
-
-        NSFileManager *fm = [NSFileManager defaultManager];
-
-        if (![fm fileExistsAtPath:path]) {
-            [fm createFileAtPath:path contents:nil attributes:nil];
-        }
-
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
-
-        if (handle != nil) {
-            [handle seekToEndOfFile];
-            [handle writeData:[timestamped dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        }
-    }
-    @catch (NSException *e) {
-    }
-}
-
-static void LXDumpViewHierarchy(UIView *view, NSInteger level) {
-    if (view == nil) {
-        return;
-    }
-
-    NSMutableString *indent = [NSMutableString string];
-
-    for (NSInteger i = 0; i < level; i++) {
-        [indent appendString:@"  "];
-    }
-
-    NSString *className = NSStringFromClass([view class]);
-
-    NSString *text = @"";
-
+static UILabel *LXFindLabel(UIView *view) {
     if ([view isKindOfClass:[UILabel class]]) {
-        text = [NSString stringWithFormat:@" text=%@", [(UILabel *)view text]];
+        return (UILabel *)view;
     }
-    else if ([view isKindOfClass:[UITextView class]]) {
-        text = [NSString stringWithFormat:@" text=%@", [(UITextView *)view text]];
-    }
-    else if ([view isKindOfClass:[UIButton class]]) {
-        text = [NSString stringWithFormat:@" title=%@", [(UIButton *)view titleForState:UIControlStateNormal]];
-    }
-
-    LXDebugLog([NSString stringWithFormat:
-                @"%@%@ frame=%@ hidden=%d alpha=%f%@",
-                indent,
-                className,
-                NSStringFromCGRect(view.frame),
-                view.hidden,
-                view.alpha,
-                text]);
 
     for (UIView *subview in view.subviews) {
-        LXDumpViewHierarchy(subview, level + 1);
+        UILabel *label = LXFindLabel(subview);
+
+        if (label != nil) {
+            return label;
+        }
     }
+
+    return nil;
 }
 
 %hook ICNoteEditorViewController
@@ -104,37 +55,26 @@ static void LXDumpViewHierarchy(UIView *view, NSInteger level) {
         return;
     }
 
-    LXDebugLog(@"========================================");
-    LXDebugLog(@"updateDateLabel: entered");
-
     ICNote *note = self.note;
 
     if (note == nil) {
-        LXDebugLog(@"note is nil");
         return;
     }
 
     NSDate *creationDate = note.creationDate;
     NSDate *modificationDate = note.modificationDate;
 
-    LXDebugLog([NSString stringWithFormat:
-                @"creationDate = %@ / modificationDate = %@",
-                creationDate,
-                modificationDate]);
+    if (creationDate == nil || modificationDate == nil) {
+        return;
+    }
 
     ICTextView *textView = self.textView;
 
     if (textView == nil) {
-        LXDebugLog(@"textView is nil");
         return;
     }
 
-    LXDebugLog([NSString stringWithFormat:
-                @"textView = %@",
-                textView]);
-
     if (![textView respondsToSelector:@selector(dateView)]) {
-        LXDebugLog(@"textView does NOT respond to dateView");
         return;
     }
 
@@ -145,20 +85,36 @@ static void LXDumpViewHierarchy(UIView *view, NSInteger level) {
     UIView *dateView = func(textView, @selector(dateView));
 
     if (dateView == nil) {
-        LXDebugLog(@"dateView is nil");
         return;
     }
 
-    LXDebugLog([NSString stringWithFormat:
-                @"dateView = %@",
-                dateView]);
+    UILabel *dateLabel = LXFindLabel(dateView);
 
-    LXDebugLog(@"--- BEGIN DATE VIEW HIERARCHY ---");
+    if (dateLabel == nil) {
+        return;
+    }
 
-    LXDumpViewHierarchy(dateView, 0);
+    NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
 
-    LXDebugLog(@"--- END DATE VIEW HIERARCHY ---");
+    [dateFormatter setLocale:[NSLocale currentLocale]];
+    [dateFormatter setDateFormat:@"MMMM d, yyyy - h:mm a"];
+
+    NSString *creationDateString =
+        [dateFormatter stringFromDate:creationDate];
+
+    NSString *modificationDateString =
+        [dateFormatter stringFromDate:modificationDate];
+
+    NSString *fullText =
+        [NSString stringWithFormat:
+            @"Created: %@\nModified: %@",
+            creationDateString,
+            modificationDateString];
+
+    [dateLabel setNumberOfLines:0];
+    [dateLabel setText:fullText];
+
+    [dateView sizeToFit];
 }
 
 %end
-
