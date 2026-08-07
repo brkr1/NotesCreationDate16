@@ -11,8 +11,42 @@
 @interface ICNoteEditorViewController : UIViewController
 @property (nonatomic, strong, readonly) ICNote *note;
 @property (nonatomic, strong, readonly) ICTextView *textView;
-- (void)updateDateLabel;
 @end
+
+static NSString *LXDebugPath(void) {
+    return [NSHomeDirectory() stringByAppendingPathComponent:
+            @"Documents/NotesCreationDate16_debug.txt"];
+}
+
+static void LXDebugLog(NSString *line) {
+    @try {
+        NSString *path = LXDebugPath();
+
+        NSString *timestamped =
+            [NSString stringWithFormat:@"%@ %@\n",
+             [NSDate date], line];
+
+        NSFileManager *fm = [NSFileManager defaultManager];
+
+        if (![fm fileExistsAtPath:path]) {
+            [fm createFileAtPath:path contents:nil attributes:nil];
+        }
+
+        NSFileHandle *handle =
+            [NSFileHandle fileHandleForWritingAtPath:path];
+
+        if (handle != nil) {
+            [handle seekToEndOfFile];
+
+            [handle writeData:
+                [timestamped dataUsingEncoding:NSUTF8StringEncoding]];
+
+            [handle closeFile];
+        }
+    }
+    @catch (NSException *exception) {
+    }
+}
 
 static UILabel *LXFindLabel(UIView *view) {
     if ([view isKindOfClass:[UILabel class]]) {
@@ -30,63 +64,60 @@ static UILabel *LXFindLabel(UIView *view) {
     return nil;
 }
 
+static BOOL LXIsNotesDateLabel(UILabel *label) {
+    UIView *view = label;
+
+    while (view != nil) {
+        if ([NSStringFromClass([view class])
+             isEqualToString:@"ICNoteEditorDateView"]) {
+            return YES;
+        }
+
+        view = view.superview;
+    }
+
+    return NO;
+}
+
+%hook UILabel
+
+- (void)setText:(NSString *)text {
+    if (LXIsNotesDateLabel(self)) {
+        LXDebugLog(
+            [NSString stringWithFormat:
+                @"========== DATE LABEL setText ==========\n"
+                @"label = %@\n"
+                @"new text = %@\n"
+                @"frame = %@\n"
+                @"numberOfLines = %ld\n"
+                @"superview = %@",
+                self,
+                text,
+                NSStringFromCGRect(self.frame),
+                (long)self.numberOfLines,
+                self.superview]
+        );
+
+        NSArray *symbols =
+            [NSThread callStackSymbols];
+
+        LXDebugLog(
+            [NSString stringWithFormat:
+                @"CALL STACK:\n%@",
+                [symbols componentsJoinedByString:@"\n"]]
+        );
+    }
+
+    %orig;
+}
+
+%end
+
 %hook ICNoteEditorViewController
 
 - (void)viewDidLayoutSubviews {
     %orig;
 
-    if (self.view.window == nil) {
-        return;
-    }
-
-    [self updateDateLabel];
-
-    __weak typeof(self) weakSelf = self;
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-
-        if (strongSelf != nil && strongSelf.view.window != nil) {
-            [strongSelf updateDateLabel];
-        }
-    });
-
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
-        dispatch_get_main_queue(),
-        ^{
-            __strong typeof(weakSelf) strongSelf = weakSelf;
-
-            if (strongSelf != nil && strongSelf.view.window != nil) {
-                [strongSelf updateDateLabel];
-            }
-        }
-    );
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    %orig;
-
-    [self updateDateLabel];
-
-    __weak typeof(self) weakSelf = self;
-
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
-        dispatch_get_main_queue(),
-        ^{
-            __strong typeof(weakSelf) strongSelf = weakSelf;
-
-            if (strongSelf != nil && strongSelf.view.window != nil) {
-                [strongSelf updateDateLabel];
-            }
-        }
-    );
-}
-
-%new
-
-- (void)updateDateLabel {
     if (self.view.window == nil) {
         return;
     }
@@ -100,9 +131,13 @@ static UILabel *LXFindLabel(UIView *view) {
     NSDate *creationDate = note.creationDate;
     NSDate *modificationDate = note.modificationDate;
 
-    if (creationDate == nil || modificationDate == nil) {
-        return;
-    }
+    LXDebugLog(
+        [NSString stringWithFormat:
+            @"ICNoteEditorViewController layout - "
+            @"creation=%@ modification=%@",
+            creationDate,
+            modificationDate]
+    );
 
     ICTextView *textView = self.textView;
 
@@ -114,44 +149,56 @@ static UILabel *LXFindLabel(UIView *view) {
         return;
     }
 
-    IMP imp = [textView methodForSelector:@selector(dateView)];
+    IMP imp =
+        [textView methodForSelector:@selector(dateView)];
 
-    id (*func)(id, SEL) = (id (*)(id, SEL))imp;
+    id (*func)(id, SEL) =
+        (id (*)(id, SEL))imp;
 
-    UIView *dateView = func(textView, @selector(dateView));
+    UIView *dateView =
+        func(textView, @selector(dateView));
 
     if (dateView == nil) {
         return;
     }
 
-    UILabel *dateLabel = LXFindLabel(dateView);
+    UILabel *dateLabel =
+        LXFindLabel(dateView);
 
     if (dateLabel == nil) {
         return;
     }
 
-    NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
-
-    [dateFormatter setLocale:[NSLocale currentLocale]];
-    [dateFormatter setDateFormat:@"MMMM d, yyyy - h:mm a"];
-
-    NSString *creationDateString =
-        [dateFormatter stringFromDate:creationDate];
-
-    NSString *modificationDateString =
-        [dateFormatter stringFromDate:modificationDate];
-
-    NSString *fullText =
+    LXDebugLog(
         [NSString stringWithFormat:
-            @"Created: %@\nModified: %@",
-            creationDateString,
-            modificationDateString];
+            @"CURRENT DATE LABEL after layout: "
+            @"text=%@ frame=%@ lines=%ld",
+            dateLabel.text,
+            NSStringFromCGRect(dateLabel.frame),
+            (long)dateLabel.numberOfLines]
+    );
+}
 
-    [dateLabel setNumberOfLines:2];
-    [dateLabel setText:fullText];
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
 
-    [dateLabel sizeToFit];
-    [dateView sizeToFit];
+    LXDebugLog(@"ICNoteEditorViewController viewDidAppear");
+}
+
+%end
+
+%hook ICTextView
+
+- (double)dateLabelOverscroll {
+    double r = %orig;
+
+    LXDebugLog(
+        [NSString stringWithFormat:
+            @"dateLabelOverscroll original=%f",
+            r]
+    );
+
+    return r * 2;
 }
 
 %end
