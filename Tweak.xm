@@ -2,10 +2,6 @@
 
 // Port of NotesCreationDate (originally by ludvigeriksson, iOS 13 fork by gilshahar7)
 // for iOS 16 / rootless jailbreaks.
-//
-// Uses real declared @property accessors (confirmed via a genuine class-dump
-// of ICNoteEditorViewController and ICNote on iOS 16), matching how the
-// underlying private classes actually expose these values on this OS version.
 
 @interface ICNote : NSObject
 @property (nonatomic, retain, readonly) NSDate *creationDate;
@@ -20,6 +16,27 @@
 @property (nonatomic, strong, readonly) ICTextView *textView;
 - (void)updateDateLabel;
 @end
+
+// Writes into the app's own sandboxed Documents folder (always writable by
+// MobileNotes itself, unlike SpringBoard's much stricter sandbox).
+static void LXDebugLog(NSString *line) {
+    @try {
+        NSString *path = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/NotesCreationDate16_debug.txt"];
+        NSString *timestamped = [NSString stringWithFormat:@"%@ %@\n", [NSDate date], line];
+        NSFileManager *fm = [NSFileManager defaultManager];
+        if (![fm fileExistsAtPath:path]) {
+            [fm createFileAtPath:path contents:nil attributes:nil];
+        }
+        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
+        if (handle != nil) {
+            [handle seekToEndOfFile];
+            [handle writeData:[timestamped dataUsingEncoding:NSUTF8StringEncoding]];
+            [handle closeFile];
+        }
+    } @catch (NSException *e) {
+        // best effort
+    }
+}
 
 %hook ICNoteEditorViewController
 
@@ -42,21 +59,28 @@
 		return;
 	}
 
+	LXDebugLog(@"updateDateLabel: entered");
+
 	ICNote *note = self.note;
 	if (note == nil) {
+		LXDebugLog(@"note is nil");
 		return;
 	}
+	LXDebugLog([NSString stringWithFormat:@"note = %@", note]);
 
 	NSDate *creationDate = note.creationDate;
 	NSDate *modificationDate = note.modificationDate;
+	LXDebugLog([NSString stringWithFormat:@"creationDate = %@ / modificationDate = %@", creationDate, modificationDate]);
 	if (creationDate == nil || modificationDate == nil) {
 		return;
 	}
 
 	ICTextView *textView = self.textView;
 	if (textView == nil) {
+		LXDebugLog(@"textView is nil");
 		return;
 	}
+	LXDebugLog([NSString stringWithFormat:@"textView = %@, respondsToSelector(dateView) = %d", textView, [textView respondsToSelector:@selector(dateView)]]);
 
 	UIView *dateView = nil;
 	if ([textView respondsToSelector:@selector(dateView)]) {
@@ -65,8 +89,10 @@
 		dateView = func(textView, @selector(dateView));
 	}
 	if (dateView == nil) {
+		LXDebugLog(@"dateView is nil");
 		return;
 	}
+	LXDebugLog([NSString stringWithFormat:@"dateView = %@, subviews = %@", dateView, dateView.subviews]);
 
 	UILabel *dateLabel = nil;
 	for (UIView *subview in dateView.subviews) {
@@ -76,8 +102,10 @@
 		}
 	}
 	if (dateLabel == nil) {
+		LXDebugLog([NSString stringWithFormat:@"no UILabel found among dateView's %lu subviews", (unsigned long)dateView.subviews.count]);
 		return;
 	}
+	LXDebugLog([NSString stringWithFormat:@"dateLabel found: %@, current text = %@", dateLabel, dateLabel.text]);
 
 	NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
 	[dateFormatter setLocale:[NSLocale currentLocale]];
@@ -90,6 +118,8 @@
 	[dateLabel setNumberOfLines:0];
 	[dateLabel setText:fullText];
 	[dateView sizeToFit];
+
+	LXDebugLog([NSString stringWithFormat:@"SUCCESS: set label text to \"%@\"", fullText]);
 }
 
 %end
