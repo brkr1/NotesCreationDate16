@@ -13,33 +13,7 @@
 @property (nonatomic, strong, readonly) ICTextView *textView;
 @end
 
-// Variável estática para guardar referência ao controlador ativo
 static __weak ICNoteEditorViewController *currentController = nil;
-
-static NSString *LXDebugPath(void) {
-    return [NSHomeDirectory() stringByAppendingPathComponent:
-            @"Documents/NotesCreationDate16_debug.txt"];
-}
-
-static void LXDebugLog(NSString *line) {
-    @try {
-        NSString *path = LXDebugPath();
-        NSString *timestamped = [NSString stringWithFormat:@"%@ %@\n", [NSDate date], line];
-        NSFileManager *fm = [NSFileManager defaultManager];
-
-        if (![fm fileExistsAtPath:path]) {
-            [fm createFileAtPath:path contents:nil attributes:nil];
-        }
-
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
-        if (handle != nil) {
-            [handle seekToEndOfFile];
-            [handle writeData:[timestamped dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        }
-    }
-    @catch (NSException *exception) {}
-}
 
 static UILabel *LXFindLabel(UIView *view) {
     if ([view isKindOfClass:[UILabel class]]) {
@@ -129,7 +103,6 @@ static void LXUpdateDateLabel(ICNoteEditorViewController *controller) {
         if (currentController && currentController.note) {
             NSString *customText = LXBuildFormattedDateString(currentController.note);
             if (customText && ![text isEqualToString:customText]) {
-                LXDebugLog([NSString stringWithFormat:@"Overriding setText from iOS: %@", text]);
                 %orig(customText);
                 return;
             }
@@ -171,7 +144,6 @@ static void LXUpdateDateLabel(ICNoteEditorViewController *controller) {
 %hook ICTextView
 
 - (double)dateLabelOverscroll {
-    // Retorna o dobro da altura original para permitir puxar a tela e visualizar as 2 linhas confortavelmente
     double r = %orig;
     return r * 2.5;
 }
