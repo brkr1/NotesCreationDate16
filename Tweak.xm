@@ -1,8 +1,5 @@
 #import <UIKit/UIKit.h>
 
-// Port of NotesCreationDate (originally by ludvigeriksson, iOS 13 fork by gilshahar7)
-// for iOS 16 / rootless jailbreaks.
-
 @interface ICNote : NSObject
 @property (nonatomic, retain, readonly) NSDate *creationDate;
 @property (nonatomic, retain, readonly) NSDate *modificationDate;
@@ -17,118 +14,151 @@
 - (void)updateDateLabel;
 @end
 
-// Writes into the app's own sandboxed Documents folder (always writable by
-// MobileNotes itself, unlike SpringBoard's much stricter sandbox).
 static void LXDebugLog(NSString *line) {
     @try {
-        NSString *path = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/NotesCreationDate16_debug.txt"];
-        NSString *timestamped = [NSString stringWithFormat:@"%@ %@\n", [NSDate date], line];
+        NSString *path = [NSHomeDirectory() stringByAppendingPathComponent:
+                          @"Documents/NotesCreationDate16_debug.txt"];
+
+        NSString *timestamped =
+            [NSString stringWithFormat:@"%@ %@\n", [NSDate date], line];
+
         NSFileManager *fm = [NSFileManager defaultManager];
+
         if (![fm fileExistsAtPath:path]) {
             [fm createFileAtPath:path contents:nil attributes:nil];
         }
+
         NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
+
         if (handle != nil) {
             [handle seekToEndOfFile];
             [handle writeData:[timestamped dataUsingEncoding:NSUTF8StringEncoding]];
             [handle closeFile];
         }
-    } @catch (NSException *e) {
-        // best effort
+    }
+    @catch (NSException *e) {
+    }
+}
+
+static void LXDumpViewHierarchy(UIView *view, NSInteger level) {
+    if (view == nil) {
+        return;
+    }
+
+    NSMutableString *indent = [NSMutableString string];
+
+    for (NSInteger i = 0; i < level; i++) {
+        [indent appendString:@"  "];
+    }
+
+    NSString *className = NSStringFromClass([view class]);
+
+    NSString *text = @"";
+
+    if ([view isKindOfClass:[UILabel class]]) {
+        text = [NSString stringWithFormat:@" text=%@", [(UILabel *)view text]];
+    }
+    else if ([view isKindOfClass:[UITextView class]]) {
+        text = [NSString stringWithFormat:@" text=%@", [(UITextView *)view text]];
+    }
+    else if ([view isKindOfClass:[UIButton class]]) {
+        text = [NSString stringWithFormat:@" title=%@", [(UIButton *)view titleForState:UIControlStateNormal]];
+    }
+
+    LXDebugLog([NSString stringWithFormat:
+                @"%@%@ frame=%@ hidden=%d alpha=%f%@",
+                indent,
+                className,
+                NSStringFromCGRect(view.frame),
+                view.hidden,
+                view.alpha,
+                text]);
+
+    for (UIView *subview in view.subviews) {
+        LXDumpViewHierarchy(subview, level + 1);
     }
 }
 
 %hook ICNoteEditorViewController
 
 - (void)viewDidLayoutSubviews {
-	%orig;
-	if (self.view.window == nil) {
-		return;
-	}
-	[self updateDateLabel];
+    %orig;
+
+    if (self.view.window == nil) {
+        return;
+    }
+
+    [self updateDateLabel];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
-	%orig;
-	[self updateDateLabel];
+    %orig;
+
+    [self updateDateLabel];
 }
 
 %new
+
 - (void)updateDateLabel {
-	if (self.view.window == nil) {
-		return;
-	}
+    if (self.view.window == nil) {
+        return;
+    }
 
-	LXDebugLog(@"updateDateLabel: entered");
+    LXDebugLog(@"========================================");
+    LXDebugLog(@"updateDateLabel: entered");
 
-	ICNote *note = self.note;
-	if (note == nil) {
-		LXDebugLog(@"note is nil");
-		return;
-	}
-	LXDebugLog([NSString stringWithFormat:@"note = %@", note]);
+    ICNote *note = self.note;
 
-	NSDate *creationDate = note.creationDate;
-	NSDate *modificationDate = note.modificationDate;
-	LXDebugLog([NSString stringWithFormat:@"creationDate = %@ / modificationDate = %@", creationDate, modificationDate]);
-	if (creationDate == nil || modificationDate == nil) {
-		return;
-	}
+    if (note == nil) {
+        LXDebugLog(@"note is nil");
+        return;
+    }
 
-	ICTextView *textView = self.textView;
-	if (textView == nil) {
-		LXDebugLog(@"textView is nil");
-		return;
-	}
-	LXDebugLog([NSString stringWithFormat:@"textView = %@, respondsToSelector(dateView) = %d", textView, [textView respondsToSelector:@selector(dateView)]]);
+    NSDate *creationDate = note.creationDate;
+    NSDate *modificationDate = note.modificationDate;
 
-	UIView *dateView = nil;
-	if ([textView respondsToSelector:@selector(dateView)]) {
-		IMP imp = [textView methodForSelector:@selector(dateView)];
-		id (*func)(id, SEL) = (id (*)(id, SEL))imp;
-		dateView = func(textView, @selector(dateView));
-	}
-	if (dateView == nil) {
-		LXDebugLog(@"dateView is nil");
-		return;
-	}
-	LXDebugLog([NSString stringWithFormat:@"dateView = %@, subviews = %@", dateView, dateView.subviews]);
+    LXDebugLog([NSString stringWithFormat:
+                @"creationDate = %@ / modificationDate = %@",
+                creationDate,
+                modificationDate]);
 
-	UILabel *dateLabel = nil;
-	for (UIView *subview in dateView.subviews) {
-		if ([subview isKindOfClass:[UILabel class]]) {
-			dateLabel = (UILabel *)subview;
-			break;
-		}
-	}
-	if (dateLabel == nil) {
-		LXDebugLog([NSString stringWithFormat:@"no UILabel found among dateView's %lu subviews", (unsigned long)dateView.subviews.count]);
-		return;
-	}
-	LXDebugLog([NSString stringWithFormat:@"dateLabel found: %@, current text = %@", dateLabel, dateLabel.text]);
+    ICTextView *textView = self.textView;
 
-	NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
-	[dateFormatter setLocale:[NSLocale currentLocale]];
-	[dateFormatter setDateFormat:@"MMMM d, yyyy - h:mm a"];
+    if (textView == nil) {
+        LXDebugLog(@"textView is nil");
+        return;
+    }
 
-	NSString *creationDateString = [dateFormatter stringFromDate:creationDate];
-	NSString *modificationDateString = [dateFormatter stringFromDate:modificationDate];
-	NSString *fullText = [NSString stringWithFormat:@"Created: %@\nModified: %@", creationDateString, modificationDateString];
+    LXDebugLog([NSString stringWithFormat:
+                @"textView = %@",
+                textView]);
 
-	[dateLabel setNumberOfLines:0];
-	[dateLabel setText:fullText];
-	[dateView sizeToFit];
+    if (![textView respondsToSelector:@selector(dateView)]) {
+        LXDebugLog(@"textView does NOT respond to dateView");
+        return;
+    }
 
-	LXDebugLog([NSString stringWithFormat:@"SUCCESS: set label text to \"%@\"", fullText]);
+    IMP imp = [textView methodForSelector:@selector(dateView)];
+
+    id (*func)(id, SEL) = (id (*)(id, SEL))imp;
+
+    UIView *dateView = func(textView, @selector(dateView));
+
+    if (dateView == nil) {
+        LXDebugLog(@"dateView is nil");
+        return;
+    }
+
+    LXDebugLog([NSString stringWithFormat:
+                @"dateView = %@",
+                dateView]);
+
+    LXDebugLog(@"--- BEGIN DATE VIEW HIERARCHY ---");
+
+    LXDumpViewHierarchy(dateView, 0);
+
+    LXDebugLog(@"--- END DATE VIEW HIERARCHY ---");
 }
 
 %end
 
-%hook ICTextView
-
-- (double)dateLabelOverscroll {
-	double r = %orig;
-	return r * 2;
-}
-
-%end
