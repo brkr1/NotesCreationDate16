@@ -7,3 +7,5 @@ Description: Tweak to show when notes were created & modified in Apple's Notes a
 Maintainer: brkr1
 Author: ludvigeriksson, gilshahar7 (original), brkr1 (iOS 16 port)
 Section: Tweaks
+Depiction: https://brkr1.github.io/repo/depictions/com.brkr1.tweaks.notescreationdate16/depiction.json
+SileoDepiction: https://brkr1.github.io/repo/depictions/com.brkr1.tweaks.notescreationdate16/depiction.json
