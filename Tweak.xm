@@ -113,8 +113,14 @@ static void LXUpdateDateLabel(ICNoteEditorViewController *controller) {
 %end
 
 static ICNoteEditorViewController *LXFindEditorController(UIResponder *responder) {
+    static Class editorClass;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        editorClass = NSClassFromString(@"ICNoteEditorViewController");
+    });
+
     while (responder != nil) {
-        if ([responder isKindOfClass:[ICNoteEditorViewController class]]) {
+        if ([responder isKindOfClass:editorClass]) {
             return (ICNoteEditorViewController *)responder;
         }
         responder = responder.nextResponder;
