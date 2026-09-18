@@ -1,6 +1,7 @@
 #import <UIKit/UIKit.h>
+#import <CoreData/CoreData.h>
 
-@interface ICNote : NSObject
+@interface ICNote : NSManagedObject
 @property (nonatomic, retain, readonly) NSDate *creationDate;
 @property (nonatomic, retain, readonly) NSDate *modificationDate;
 @end
@@ -42,12 +43,23 @@ static NSString *LXFormatDate(NSDate *date) {
 }
 
 static NSString *LXBuildFormattedDateString(ICNote *note) {
-    if (!note || !note.creationDate || !note.modificationDate) return nil;
+    if (note == nil) return nil;
 
-    NSString *creation = LXFormatDate(note.creationDate);
-    NSString *modification = LXFormatDate(note.modificationDate);
+    NSManagedObjectContext *context = note.managedObjectContext;
+    if (context == nil) return nil;
 
-    return [NSString stringWithFormat:@"Created: %@\nModified: %@", creation, modification];
+    __block NSString *result = nil;
+    [context performBlockAndWait:^{
+        NSDate *creationDate = note.creationDate;
+        NSDate *modificationDate = note.modificationDate;
+        if (creationDate == nil || modificationDate == nil) return;
+
+        NSString *creation = LXFormatDate(creationDate);
+        NSString *modification = LXFormatDate(modificationDate);
+        result = [NSString stringWithFormat:@"Created: %@\nModified: %@", creation, modification];
+    }];
+
+    return result;
 }
 
 static void LXUpdateDateLabel(ICNoteEditorViewController *controller) {
@@ -100,7 +112,22 @@ static void LXUpdateDateLabel(ICNoteEditorViewController *controller) {
 
 %end
 
+static ICNoteEditorViewController *LXFindEditorController(UIResponder *responder) {
+    while (responder != nil) {
+        if ([responder isKindOfClass:[ICNoteEditorViewController class]]) {
+            return (ICNoteEditorViewController *)responder;
+        }
+        responder = responder.nextResponder;
+    }
+    return nil;
+}
+
 %hook ICTextView
+
+- (void)layoutSubviews {
+    %orig;
+    LXUpdateDateLabel(LXFindEditorController(self));
+}
 
 - (double)dateLabelOverscroll {
     double r = %orig;

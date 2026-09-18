@@ -26,7 +26,7 @@ TWEAK_NAME = NotesCreationDate16
 
 NotesCreationDate16_FILES = Tweak.xm
 NotesCreationDate16_CFLAGS = -fobjc-arc
-NotesCreationDate16_FRAMEWORKS = UIKit CoreGraphics
+NotesCreationDate16_FRAMEWORKS = UIKit CoreGraphics CoreData
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
