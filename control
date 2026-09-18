@@ -1,7 +1,7 @@
 Package: com.brkr1.tweaks.notescreationdate16
 Name: NotesCreationDate16
 Depends: mobilesubstrate
-Version: 1.0
+Version: 1.1
 Architecture: iphoneos-arm
 Description: Tweak to show when notes were created & modified in Apple's Notes app. Port of NotesCreationDate13 (originally by ludvigeriksson / gilshahar7) for iOS 16, rootless.
 Maintainer: brkr1

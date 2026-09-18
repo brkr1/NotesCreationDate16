@@ -13,8 +13,6 @@
 @property (nonatomic, strong, readonly) ICTextView *textView;
 @end
 
-static __weak ICNoteEditorViewController *currentController = nil;
-
 static UILabel *LXFindLabel(UIView *view) {
     if ([view isKindOfClass:[UILabel class]]) {
         return (UILabel *)view;
@@ -27,17 +25,6 @@ static UILabel *LXFindLabel(UIView *view) {
         }
     }
     return nil;
-}
-
-static BOOL LXIsNotesDateLabel(UILabel *label) {
-    UIView *view = label;
-    while (view != nil) {
-        if ([NSStringFromClass([view class]) isEqualToString:@"ICNoteEditorDateView"]) {
-            return YES;
-        }
-        view = view.superview;
-    }
-    return NO;
 }
 
 static NSString *LXFormatDate(NSDate *date) {
@@ -93,50 +80,22 @@ static void LXUpdateDateLabel(ICNoteEditorViewController *controller) {
     }
 }
 
-%hook UILabel
-
-- (void)setText:(NSString *)text {
-    if (LXIsNotesDateLabel(self)) {
-        self.numberOfLines = 0;
-        self.lineBreakMode = NSLineBreakByWordWrapping;
-
-        if (currentController && currentController.note) {
-            NSString *customText = LXBuildFormattedDateString(currentController.note);
-            if (customText && ![text isEqualToString:customText]) {
-                %orig(customText);
-                return;
-            }
-        }
-    }
-    %orig(text);
-}
-
-%end
-
 %hook ICNoteEditorViewController
 
 - (void)viewDidLayoutSubviews {
     %orig;
     if (self.view.window == nil) return;
 
-    currentController = self;
     LXUpdateDateLabel(self);
 }
 
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
-    currentController = self;
 
+    __weak ICNoteEditorViewController *weakSelf = self;
     dispatch_async(dispatch_get_main_queue(), ^{
-        LXUpdateDateLabel(self);
+        LXUpdateDateLabel(weakSelf);
     });
-}
-
-- (void)viewWillDisappear:(BOOL)animated {
-    %orig;
-    if (currentController == self) {
-        currentController = nil;
-    }
 }
 
 %end
